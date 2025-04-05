@@ -27,7 +27,7 @@ public class DelayTreeBenchmark
         _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
     }
 
-    //[Benchmark(Baseline = true)]
+    [Benchmark(Baseline = true)]
     public async Task Task_Delay()
     {
         Task[] tasks = _delays.Select(Task.Delay).ToArray();
@@ -54,7 +54,7 @@ public class DelayTreeBenchmark
         _wheelTimer = null;
     }
     
-    //[Benchmark]
+    [Benchmark]
     public async Task HashedWheelTimer_Delay()
     {
         Task[] tasks = _delays.Select(t => DelayWheelTimer((uint)t)).ToArray();
