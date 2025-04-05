@@ -31,7 +31,7 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
         _timer = new Timer(_ =>
         {
             Collect();
-        }, null, accuracy, accuracy);
+        }, null, -1, -1);
     }
 
     private uint GetTimestampMs()
@@ -61,7 +61,8 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
             // Here or after modulo?
             if (timestampDelay < _timestampUntilGuaranteedNoDelay)
             {
-                Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, delay);
+                Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, timestampDelay);
+                _timer.Change(delay, 100);
             }
 
             // Timestamps are wrapped around the max delay the tree can handle
@@ -130,10 +131,12 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
             {
                 //Console.WriteLine($"Next delay in {nextDelayRelative - timestamp} ms. Next delay timestamp: {_timestampUntilGuaranteedNoDelay} -> {nextDelayRelative}");
                 Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, nextDelayRelative);
+                _timer.Change((int)(nextDelayRelative - timestamp), 100);
             }
             else
             {
                 Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, 0);
+                _timer.Change(1, 1);
                 //Console.WriteLine($"No next delay");
             }
 

@@ -33,6 +33,7 @@ public class DelayTreeAccuracyBenchmark
     [Benchmark]
     public async Task DelayTree_Delay()
     {
-        await _delayTree.Delay((uint)Delay);
+        await Task.Delay(Delay);
+        // await _delayTree.Delay((uint)Delay);
     }
 }

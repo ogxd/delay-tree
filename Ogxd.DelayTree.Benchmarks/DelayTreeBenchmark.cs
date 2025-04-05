@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+using HWT;
 
 namespace Ogxd.DelayTree.Benchmarks;
 
@@ -8,6 +9,7 @@ namespace Ogxd.DelayTree.Benchmarks;
 public class DelayTreeBenchmark
 {
     private DelayTree<TaskCompletion, Task> _delayTree;
+    private HashedWheelTimer _wheelTimer;
     private int[] _delays;
 
     [Params(1000000)]
@@ -34,6 +36,7 @@ public class DelayTreeBenchmark
     public void Cleanup()
     {
         _delayTree.Dispose();
+        _delayTree = null;
     }
 
     [Benchmark(Baseline = true)]
@@ -50,5 +53,33 @@ public class DelayTreeBenchmark
         Task[] tasks = _delays.Select(t => _delayTree.Delay((uint)t)).ToArray();
 
         await Task.WhenAll(tasks);
+    }
+    
+    [GlobalSetup(Target = nameof(HashedWheelTimer_Delay))]
+    public void SetupHashedWheelTimer()
+    {
+        _delays = Enumerable.Range(0, Recursions).Select(_ => Random.Shared.Next((int)(0.8d * Delay), (int)(1.2d * Delay))).ToArray();
+        _wheelTimer = new HashedWheelTimer( tickDuration: TimeSpan.FromSeconds(1)
+            , ticksPerWheel: 100000
+            , maxPendingTimeouts: 0);
+    }
+
+    [GlobalCleanup(Target = nameof(HashedWheelTimer_Delay))]
+    public void CleanupHashedWheelTimer()
+    {
+        _wheelTimer = null;
+    }
+    
+    [Benchmark]
+    public async Task HashedWheelTimer_Delay()
+    {
+        Task[] tasks = _delays.Select(t => DelayWheelTimer((uint)t)).ToArray();
+        
+        await Task.WhenAll(tasks);
+    }
+    
+    private async Task DelayWheelTimer(uint delay)
+    {
+        await _wheelTimer.Delay((uint)delay);
     }
 }
