@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="Ogxd.DelayTree.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Include="Lib.Harmony" Version="2.3.5" />
+	</ItemGroup>
+</Project>
