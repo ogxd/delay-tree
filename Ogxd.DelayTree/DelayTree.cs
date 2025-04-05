@@ -10,7 +10,7 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
     private readonly int _bitDepth;
     private readonly DelayTreeNode _root = new();
     private readonly Stopwatch _stopwatch;
-    private readonly Timer _timer;
+    //private readonly Timer _timer;
     private readonly T1 _completed;
     private readonly Stack<StackNode> _pooledStack = new();
     private readonly ReaderWriterLockSlim _lock = new();
@@ -18,20 +18,52 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
     private long _disposed = 0;
     private uint _lastTimestamp = 0;
     private ulong _count;
+    private Thread _thread;
+    private uint _timestampUntilGuaranteedNoDelay = uint.MaxValue;
 
     public DelayTree(int bitDepth = 32, int accuracy = 20)
     {
         _bitDepth = bitDepth;
         _maxDelay = uint.MaxValue >> (32 - bitDepth);
-
+        
         // A reusable completion that is already completed
         _completed = new T1();
         _completed.SetCompleted(false);
         _stopwatch = Stopwatch.StartNew();
-        _timer = new Timer(_ =>
+        // _timer = new Timer(_ =>
+        // {
+        //     Collect();
+        // }, null, -1, -1);
+        
+        _thread = new Thread(() =>
         {
-            Collect();
-        }, null, -1, -1);
+            SpinWait spinWait = new();
+            while (Interlocked.Read(ref _disposed) == 0)
+            {
+                if (Interlocked.Read(ref _count) == 0)
+                {
+                    spinWait.SpinOnce();
+                    continue;
+                }
+                
+                uint timestamp = GetTimestampMs();
+        
+                // Fast path - no delays to collect because we know the next delay is in the future
+                if (timestamp < _timestampUntilGuaranteedNoDelay)
+                {
+                    _lastTimestamp = timestamp;
+                    spinWait.SpinOnce();
+                    continue;
+                }
+                
+                Collect(timestamp);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "DelayTree Collector"
+        };
+        _thread.Start();
     }
 
     private uint GetTimestampMs()
@@ -50,24 +82,24 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
         {
             return _completed.CompletionHandle;
         }
+        
+        uint timestamp = GetTimestampMs();
+        uint timestampDelay = timestamp + delay;
+        timestampDelay %= _maxDelay;
 
         _lock.EnterReadLock(); // Can happen concurrently thanks to Interlocked semantics
         try
         {
-            uint timestamp = GetTimestampMs();
-
-            uint timestampDelay = timestamp + delay;
-
             // Here or after modulo?
             if (timestampDelay < _timestampUntilGuaranteedNoDelay)
             {
                 Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, timestampDelay);
-                _timer.Change(delay, -1);
+                //_timer.Change(delay, -1);
                 //Console.WriteLine($"Timestamp {timestamp} + delay {delay} = {timestampDelay} < {_timestampUntilGuaranteedNoDelay}, setting timer to {delay}");
             }
 
             // Timestamps are wrapped around the max delay the tree can handle
-            timestampDelay %= _maxDelay;
+            
             //Console.WriteLine("[add] Creating task expiring in: " + delay);
 
             DelayTreeNode? node = _root;
@@ -101,16 +133,16 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
             _lock.ExitReadLock();
         }
     }
-
-    private uint _timestampUntilGuaranteedNoDelay = uint.MaxValue;
-
-    private void Collect()
+    
+    private void Collect(uint timestamp)
     {
         // Fast path - no delays to collect because the tree is empty
-        if (Interlocked.Read(ref _count) == 0)
-        {
-            return;
-        }
+        // if (Interlocked.Read(ref _count) == 0)
+        // {
+        //     return;
+        // }
+        
+        //uint timestamp = GetTimestampMs();
         
         // Fast path - no delays to collect because we know the next delay is in the future
         // if (timestamp < _timestampUntilGuaranteedNoDelay)
@@ -126,13 +158,11 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
         _lock.EnterWriteLock();
         try
         {
-            uint timestamp = GetTimestampMs();
-            
             if (TryPeekNextDelay(timestamp, out uint nextDelayTimestamp))
             {
                 //Console.WriteLine($"Next delay in {nextDelayTimestamp - timestamp} ms. Next delay timestamp: {_timestampUntilGuaranteedNoDelay} -> {nextDelayTimestamp}");
                 Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, nextDelayTimestamp);
-                _timer.Change((int)(nextDelayTimestamp - timestamp), 10);
+                //_timer.Change((int)(nextDelayTimestamp - timestamp), 10);
             }
             else
             {
@@ -278,7 +308,7 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            _timer.Dispose();
+            //_timer.Dispose();
             //_lock.Dispose();
         }
     }

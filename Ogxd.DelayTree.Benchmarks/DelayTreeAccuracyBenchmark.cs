@@ -12,13 +12,13 @@ public class DelayTreeAccuracyBenchmark
     [Params(1, /*2, 5, 10,*/ 1000)]
     public int Delay { get; set; }
 
-    [IterationSetup(Target = nameof(DelayTree_Delay))]
+    [GlobalSetup(Target = nameof(DelayTree_Delay))]
     public void Setup()
     {
-        _delayTree = new(16, 1);
+        _delayTree = new(16, 20);
     }
 
-    [IterationCleanup(Target = nameof(DelayTree_Delay))]
+    [GlobalCleanup(Target = nameof(DelayTree_Delay))]
     public void Cleanup()
     {
         _delayTree.Dispose();
