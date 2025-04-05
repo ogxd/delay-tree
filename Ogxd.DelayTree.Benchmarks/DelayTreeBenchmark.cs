@@ -59,9 +59,7 @@ public class DelayTreeBenchmark
     public void SetupHashedWheelTimer()
     {
         _delays = Enumerable.Range(0, Recursions).Select(_ => Random.Shared.Next((int)(0.8d * Delay), (int)(1.2d * Delay))).ToArray();
-        _wheelTimer = new HashedWheelTimer( tickDuration: TimeSpan.FromSeconds(1)
-            , ticksPerWheel: 100000
-            , maxPendingTimeouts: 0);
+        _wheelTimer = new HashedWheelTimer(tickDuration: TimeSpan.FromMilliseconds(20), ticksPerWheel: 100000, maxPendingTimeouts: 0);
     }
 
     [GlobalCleanup(Target = nameof(HashedWheelTimer_Delay))]
