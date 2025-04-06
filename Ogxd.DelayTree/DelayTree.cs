@@ -50,15 +50,22 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
                 uint timestamp = GetTimestampMs();
         
                 // Fast path - no delays to collect because we know the next delay is in the future
-                if (timestamp < _timestampUntilGuaranteedNoDelay)
+                int delay = (int)(_timestampUntilGuaranteedNoDelay - timestamp);
+                if (delay > 0)
                 {
                     _lastTimestamp = timestamp;
-                    // Fancy spinning
-                    for (int i = 0; i < 100; i++)
+                    if (delay < 5)
                     {
-                        Nop();
+                        // Fancy spinning
+                        for (int i = 0; i < 100; i++)
+                        {
+                            Nop();
+                        }
                     }
-                    //spinWait.SpinOnce();
+                    else
+                    {
+                        spinWait.SpinOnce();
+                    }
                     continue;
                 }
                 
