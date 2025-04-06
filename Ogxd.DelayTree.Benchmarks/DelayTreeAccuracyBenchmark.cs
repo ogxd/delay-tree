@@ -24,15 +24,21 @@ public class DelayTreeAccuracyBenchmark
         _delayTree.Dispose();
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark(Baseline = true, OperationsPerInvoke = 10)]
     public async Task Task_Delay()
     {
-        await Task.Delay(Delay);
+        for (int i = 0; i < 10; i++)
+        {
+            await Task.Delay(Delay);
+        }
     }
 
-    [Benchmark]
+    [Benchmark(OperationsPerInvoke = 10)]
     public async Task DelayTree_Delay()
     {
-        await _delayTree.Delay((uint)Delay);
+        for (int i = 0; i < 10; i++)
+        {
+            await _delayTree.Delay((uint)Delay);
+        }
     }
 }
