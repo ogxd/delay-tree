@@ -4,6 +4,7 @@ using HWT;
 
 namespace Ogxd.DelayTree.Benchmarks;
 
+/*
 [MemoryDiagnoser(false)]
 [CpuDiagnoser]
 [ThreadingDiagnoser]
@@ -94,3 +95,4 @@ public class DelayTreeBenchmark
         await Task.WhenAll(tasks);
     }
 }
+*/

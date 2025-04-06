@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Ogxd.DelayTree;
@@ -52,7 +53,12 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
                 if (timestamp < _timestampUntilGuaranteedNoDelay)
                 {
                     _lastTimestamp = timestamp;
-                    spinWait.SpinOnce();
+                    // Fancy spinning
+                    for (int i = 0; i < 100; i++)
+                    {
+                        Nop();
+                    }
+                    //spinWait.SpinOnce();
                     continue;
                 }
                 
@@ -65,6 +71,9 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
         };
         _thread.Start();
     }
+    
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void Nop() {}
 
     private uint GetTimestampMs()
     {
