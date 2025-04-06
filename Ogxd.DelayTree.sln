@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ogxd.DelayTree.Benchmarks", "Ogxd.DelayTree.Benchmarks\Ogxd.DelayTree.Benchmarks.csproj", "{E90218EB-1B8E-4E43-B998-9A313075BBC2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ogxd.DelayTree.BclPatch", "Ogxd.DelayTree.BclPatch\Ogxd.DelayTree.BclPatch.csproj", "{9B866E0C-FD27-430A-B41B-C0D7C1C29FFE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{E90218EB-1B8E-4E43-B998-9A313075BBC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E90218EB-1B8E-4E43-B998-9A313075BBC2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E90218EB-1B8E-4E43-B998-9A313075BBC2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B866E0C-FD27-430A-B41B-C0D7C1C29FFE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B866E0C-FD27-430A-B41B-C0D7C1C29FFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B866E0C-FD27-430A-B41B-C0D7C1C29FFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B866E0C-FD27-430A-B41B-C0D7C1C29FFE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

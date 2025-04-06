@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Lib.Harmony" Version="2.3.5" />
+    </ItemGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\Ogxd.DelayTree\Ogxd.DelayTree.csproj" />
+    </ItemGroup>
+</Project>

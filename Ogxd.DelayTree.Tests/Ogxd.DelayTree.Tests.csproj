@@ -2,6 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
@@ -18,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Ogxd.DelayTree.BclPatch\Ogxd.DelayTree.BclPatch.csproj" />
         <ProjectReference Include="..\Ogxd.DelayTree\Ogxd.DelayTree.csproj" />
     </ItemGroup>
 

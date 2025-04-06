@@ -4,11 +4,9 @@
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Nullable>enable</Nullable>
+		<NoWarn>CS1591</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="Ogxd.DelayTree.Tests" />
-	</ItemGroup>
-	<ItemGroup>
-	  <PackageReference Include="Lib.Harmony" Version="2.3.5" />
 	</ItemGroup>
 </Project>

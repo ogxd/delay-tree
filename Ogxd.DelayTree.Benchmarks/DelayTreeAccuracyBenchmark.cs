@@ -7,38 +7,39 @@ namespace Ogxd.DelayTree.Benchmarks;
 [ThreadingDiagnoser]
 public class DelayTreeAccuracyBenchmark
 {
-    private DelayTree<TaskCompletion, Task> _delayTree;
+    private DelayTree<TaskCompletion, Task>? _delayTree;
 
-    [Params(1, /*2, 5, 10,*/ 1000)]
+    [Params(1, /*2, 5,*/ 10)]
     public int Delay { get; set; }
 
     [GlobalSetup(Target = nameof(DelayTree_Delay))]
     public void Setup()
     {
-        _delayTree = new(16, 20);
+        _delayTree = new(16);
     }
 
     [GlobalCleanup(Target = nameof(DelayTree_Delay))]
     public void Cleanup()
     {
-        _delayTree.Dispose();
+        _delayTree!.Dispose();
+        _delayTree = null;
     }
 
-    [Benchmark(Baseline = true, OperationsPerInvoke = 10)]
+    [Benchmark(Baseline = true, OperationsPerInvoke = 100)]
     public async Task Task_Delay()
     {
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 100; i++)
         {
             await Task.Delay(Delay);
         }
     }
 
-    [Benchmark(OperationsPerInvoke = 10)]
+    [Benchmark(OperationsPerInvoke = 100)]
     public async Task DelayTree_Delay()
     {
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 100; i++)
         {
-            await _delayTree.Delay((uint)Delay);
+            await _delayTree!.Delay((uint)Delay);
         }
     }
 }

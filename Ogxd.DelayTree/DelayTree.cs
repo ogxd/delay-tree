@@ -1,17 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Ogxd.DelayTree;
 
-public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, new()
+public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, ICompletion<T2>, new()
 {
     private readonly int _bitDepth;
     private readonly DelayTreeNode _root = new();
     private readonly Stopwatch _stopwatch;
-    //private readonly Timer _timer;
+    private readonly IDelayTreeTimer _timer;
     private readonly T1 _completed;
     private readonly Stack<StackNode> _pooledStack = new();
     private readonly ReaderWriterLockSlim _lock = new();
@@ -19,10 +18,20 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
     private long _disposed = 0;
     private uint _lastTimestamp = 0;
     private ulong _count;
-    private Thread _thread;
-    private uint _timestampUntilGuaranteedNoDelay = uint.MaxValue;
 
-    public DelayTree(int bitDepth = 32, int accuracy = 20)
+    private uint _nextDelayTimestampMs = uint.MaxValue;
+
+    public DelayTree()
+        : this(32)
+    {
+    }
+    
+    public DelayTree(int bitDepth)
+        : this(bitDepth, new DelayTreeThreadPoolTimer(10))
+    {
+    }
+    
+    public DelayTree(int bitDepth, IDelayTreeTimer timer)
     {
         _bitDepth = bitDepth;
         _maxDelay = uint.MaxValue >> (32 - bitDepth);
@@ -31,62 +40,15 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
         _completed = new T1();
         _completed.SetCompleted(false);
         _stopwatch = Stopwatch.StartNew();
-        // _timer = new Timer(_ =>
-        // {
-        //     Collect();
-        // }, null, -1, -1);
         
-        _thread = new Thread(() =>
-        {
-            SpinWait spinWait = new();
-            while (Interlocked.Read(ref _disposed) == 0)
-            {
-                if (Interlocked.Read(ref _count) == 0)
-                {
-                    spinWait.SpinOnce();
-                    continue;
-                }
-                
-                uint timestamp = GetTimestampMs();
-        
-                // Fast path - no delays to collect because we know the next delay is in the future
-                int delay = (int)(_timestampUntilGuaranteedNoDelay - timestamp);
-                if (delay > 0)
-                {
-                    _lastTimestamp = timestamp;
-                    if (delay < 5)
-                    {
-                        // Fancy spinning
-                        for (int i = 0; i < 100; i++)
-                        {
-                            Nop();
-                        }
-                    }
-                    else
-                    {
-                        spinWait.SpinOnce();
-                    }
-                    continue;
-                }
-                
-                Collect(timestamp);
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "DelayTree Collector"
-        };
-        _thread.Start();
+        _timer = timer;
+        _timer.SetDelayTree(this);
     }
     
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private void Nop() {}
-
-    private uint GetTimestampMs()
-    {
-        return (uint)(_stopwatch.ElapsedMilliseconds % _maxDelay);
-    }
-
+    public ulong Count => Interlocked.Read(ref _count);
+    public uint CurrentTimestampMs => (uint)(_stopwatch.ElapsedMilliseconds % _maxDelay);
+    public uint NextDelayTimestampMs => _nextDelayTimestampMs;
+    
     public T2 Delay(uint delay)
     {
         if (delay >= _maxDelay)
@@ -99,7 +61,7 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
             return _completed.CompletionHandle;
         }
         
-        uint timestamp = GetTimestampMs();
+        uint timestamp = CurrentTimestampMs;
         uint timestampDelay = timestamp + delay;
         timestampDelay %= _maxDelay;
 
@@ -107,9 +69,9 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
         try
         {
             // Here or after modulo?
-            if (timestampDelay < _timestampUntilGuaranteedNoDelay)
+            if (timestampDelay < _nextDelayTimestampMs)
             {
-                Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, timestampDelay);
+                Interlocked.Exchange(ref _nextDelayTimestampMs, timestampDelay);
                 //_timer.Change(delay, -1);
                 //Console.WriteLine($"Timestamp {timestamp} + delay {delay} = {timestampDelay} < {_timestampUntilGuaranteedNoDelay}, setting timer to {delay}");
             }
@@ -149,8 +111,8 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
             _lock.ExitReadLock();
         }
     }
-    
-    private void Collect(uint timestamp)
+
+    public void Collect(uint timestamp)
     {
         // Fast path - no delays to collect because the tree is empty
         // if (Interlocked.Read(ref _count) == 0)
@@ -177,12 +139,12 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
             if (TryPeekNextDelay(timestamp, out uint nextDelayTimestamp))
             {
                 //Console.WriteLine($"Next delay in {nextDelayTimestamp - timestamp} ms. Next delay timestamp: {_timestampUntilGuaranteedNoDelay} -> {nextDelayTimestamp}");
-                Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, nextDelayTimestamp);
+                Interlocked.Exchange(ref _nextDelayTimestampMs, nextDelayTimestamp);
                 //_timer.Change((int)(nextDelayTimestamp - timestamp), 10);
             }
             else
             {
-                Interlocked.Exchange(ref _timestampUntilGuaranteedNoDelay, 0);
+                Interlocked.Exchange(ref _nextDelayTimestampMs, 0);
                 //_timer.Change(-1, -1);
                 //Console.WriteLine($"No next delay");
             }
@@ -324,7 +286,7 @@ public class DelayTree<T1, T2> : IDisposable where T1 : class, ICompletion<T2>, 
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            //_timer.Dispose();
+            _timer.Dispose();
             //_lock.Dispose();
         }
     }

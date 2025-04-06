@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-namespace Ogxd.DelayTree;
+namespace Ogxd.DelayTree.Tests;
 
 public static class CancellationTokenExtensions
 {
