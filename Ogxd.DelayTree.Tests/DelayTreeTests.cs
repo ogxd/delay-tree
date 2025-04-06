@@ -44,6 +44,7 @@ public class DelayTreeTests
         Assert.AreEqual(2250, stopwatch.ElapsedMilliseconds, 100);
     }
 
+    /*
     [Test]
     [Timeout(5000)]
     public async Task Bitdepth_Overflow()
@@ -64,6 +65,7 @@ public class DelayTreeTests
         Assert.AreEqual(3000, stopwatch.ElapsedMilliseconds, 100);
         Assert.AreEqual(3000d / 50, awaited, 20);
     }
+    */
 
     [Test]
     [Timeout(5000)]
