@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Flurl.Http;
-using HarmonyLib;
 using NUnit.Framework;
 
 namespace Ogxd.DelayTree.Tests;
@@ -25,7 +23,7 @@ public class DelayTreeTests
 
         Assert.AreEqual(3500, stopwatch.ElapsedMilliseconds, 100);
     }
-
+    
     [Test]
     [Timeout(5000)]
     public async Task Sequential_Descending()
@@ -82,6 +80,32 @@ public class DelayTreeTests
         stopwatch.Stop();
 
         Assert.AreEqual(2000, stopwatch.ElapsedMilliseconds, 100);
+    }
+    
+    [Test]
+    [Timeout(5000)]
+    public async Task SharingTaskDoesNotAlterContinuation()
+    {
+        using DelayTree<TaskCompletion, Task> delayTree = new(24);
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        
+        int continued = 0;
+        
+        Task t1 = delayTree.Delay(1000);
+        Task t2 = delayTree.Delay(1000);
+        
+        // Implementation will use a single task for both delays, since they are the same
+        Assert.AreSame(t1, t2);
+        
+        // Only register continuation on one of the tasks
+        t2 = t2.ContinueWith(_ => Interlocked.Increment(ref continued), TaskContinuationOptions.ExecuteSynchronously);
+        
+        await Task.WhenAll(t1, t2);
+        stopwatch.Stop();
+
+        // Continuation should trigger only once
+        Assert.AreEqual(1, continued);
     }
 
     [Test]

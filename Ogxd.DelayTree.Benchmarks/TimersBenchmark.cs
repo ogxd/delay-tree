@@ -14,7 +14,7 @@ public class TimersBenchmark
     [Params(10000, 1000000)]
     public int Recursions { get; set; }
 
-    [Params(1, 50)]
+    [Params(1)]
     public int Delay { get; set; }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -59,14 +59,14 @@ public class TimersBenchmark
         }
     }
     
-    [Benchmark(OperationsPerInvoke = 10)]
-    public async Task DelayTree_ThreadPoolTimer1()
-    {
-        var delayTree = new DelayTree<TaskCompletion, Task>(16, new DelayTreeThreadPoolTimer(1));
-        for (int i = 0; i < 10; i++)
-        {
-            Task[] tasks = _delays.Select(t => delayTree!.Delay((uint)t)).ToArray();
-            await Task.WhenAll(tasks);
-        }
-    }
+    // [Benchmark(OperationsPerInvoke = 10)]
+    // public async Task DelayTree_ThreadPoolTimer1()
+    // {
+    //     var delayTree = new DelayTree<TaskCompletion, Task>(16, new DelayTreeThreadPoolTimer(1));
+    //     for (int i = 0; i < 10; i++)
+    //     {
+    //         Task[] tasks = _delays.Select(t => delayTree!.Delay((uint)t)).ToArray();
+    //         await Task.WhenAll(tasks);
+    //     }
+    // }
 }
