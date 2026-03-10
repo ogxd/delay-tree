@@ -7,7 +7,7 @@ namespace Ogxd.DelayTree.Benchmarks;
 [ThreadingDiagnoser]
 public class DelayTreeAccuracyBenchmark
 {
-    private DelayTree<TaskCompletion, Task>? _delayTree;
+    private DelayTreeThreadPoolTimer? _delayTree;
 
     [Params(1, /*2, 5,*/ 10)]
     public int Delay { get; set; }

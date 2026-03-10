@@ -1,30 +1,33 @@
+using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Ogxd.DelayTree;
 
-public class DelayTreeDedicatedThreadTimer : IDelayTreeTimer
+public class DelayTreeDedicatedThreadTimer : IDisposable
 {
-    private Thread? _thread;
+    private readonly Thread? _thread;
+    private readonly DelayTree2<TaskCompletionSource> _delayTree = new();
     private long _disposed = 0;
-    
-    public void SetDelayTree(IDelayTree delayTree)
+
+    public DelayTreeDedicatedThreadTimer()
     {
         _thread = new Thread(() =>
         {
             SpinWait spinWait = new();
             while (Interlocked.Read(ref _disposed) == 0)
             {
-                if (delayTree.Count == 0ul)
+                if (_delayTree.Count == 0ul)
                 {
                     spinWait.SpinOnce();
                     continue;
                 }
                 
-                uint timestamp = delayTree.CurrentTimestampMs;
+                uint timestamp = _delayTree.CurrentTimestampMs;
         
                 // Fast path - no delays to collect because we know the next delay is in the future
-                int delay = (int)(delayTree.NextDelayTimestampMs - timestamp);
+                int delay = (int)(_delayTree.NextDelayTimestampMs - timestamp);
                 if (delay > 0)
                 {
                     //_lastTimestamp = timestamp;
@@ -43,7 +46,10 @@ public class DelayTreeDedicatedThreadTimer : IDelayTreeTimer
                     continue;
                 }
                 
-                delayTree.Collect(timestamp);
+                foreach (var tcs in _delayTree.Collect())
+                {
+                    tcs.TrySetResult();
+                }
             }
         })
         {
@@ -53,6 +59,18 @@ public class DelayTreeDedicatedThreadTimer : IDelayTreeTimer
         _thread.Start();
     }
     
+    public Task Delay(uint delayMilliseconds)
+    {
+        if (delayMilliseconds == 0)
+        {
+            return Task.CompletedTask;
+        }
+        
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _delayTree.Add(tcs, delayMilliseconds);
+        return tcs.Task;
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void Nop() {}
 

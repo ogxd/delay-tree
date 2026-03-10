@@ -40,7 +40,7 @@ public class TimersBenchmark
     [Benchmark(OperationsPerInvoke = 10)]
     public async Task DelayTree_DedicatedThread()
     {
-        var delayTree = new DelayTree<TaskCompletion, Task>(16, new DelayTreeDedicatedThreadTimer());
+        using var delayTree = new DelayTreeDedicatedThreadTimer();
         for (int i = 0; i < 10; i++)
         {
             Task[] tasks = _delays.Select(t => delayTree!.Delay((uint)t)).ToArray();
@@ -51,7 +51,7 @@ public class TimersBenchmark
     [Benchmark(OperationsPerInvoke = 10)]
     public async Task DelayTree_ThreadPoolTimer16()
     {
-        var delayTree = new DelayTree<TaskCompletion, Task>(16, new DelayTreeThreadPoolTimer(16));
+        using var delayTree = new DelayTreeThreadPoolTimer(16);
         for (int i = 0; i < 10; i++)
         {
             Task[] tasks = _delays.Select(t => delayTree!.Delay((uint)t)).ToArray();

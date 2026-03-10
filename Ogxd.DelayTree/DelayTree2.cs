@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace Ogxd.DelayTree;
 
-public class DelayTree2<T> : IDisposable
+public class DelayTree2<T>
 {
     private readonly int _bitDepth;
     private readonly DelayTreeNode _root = new();
@@ -13,7 +13,6 @@ public class DelayTree2<T> : IDisposable
     private readonly Stack<StackNode> _pooledStack = new();
     private readonly ReaderWriterLockSlim _lock = new();
     private readonly uint _maxDelay;
-    private long _disposed = 0;
     private uint _lastTimestamp = 0;
     private ulong _count;
 
@@ -44,6 +43,8 @@ public class DelayTree2<T> : IDisposable
             throw new ArgumentOutOfRangeException(nameof(delay), "Delay is too large for the bit depth.");
         }
         
+        Interlocked.Increment(ref _count);
+        
         uint timestamp = CurrentTimestampMs;
         uint timestampDelay = timestamp + delay;
         timestampDelay %= _maxDelay;
@@ -55,13 +56,7 @@ public class DelayTree2<T> : IDisposable
             if (timestampDelay < _nextDelayTimestampMs)
             {
                 Interlocked.Exchange(ref _nextDelayTimestampMs, timestampDelay);
-                //_timer.Change(delay, -1);
-                //Console.WriteLine($"Timestamp {timestamp} + delay {delay} = {timestampDelay} < {_timestampUntilGuaranteedNoDelay}, setting timer to {delay}");
             }
-
-            // Timestamps are wrapped around the max delay the tree can handle
-            
-            //Console.WriteLine("[add] Creating task expiring in: " + delay);
 
             DelayTreeNode? node = _root;
             for (int i = _bitDepth - 1; i >= 0; i--)
@@ -99,22 +94,12 @@ public class DelayTree2<T> : IDisposable
     public IEnumerable<T> Collect()
     {
         // Fast path - no delays to collect because the tree is empty
-        // if (Interlocked.Read(ref _count) == 0)
-        // {
-        //     return;
-        // }
+        if (Interlocked.Read(ref _count) == 0)
+        {
+            return Array.Empty<T>();
+        }
 
         uint timestamp = CurrentTimestampMs;
-        
-        // Fast path - no delays to collect because we know the next delay is in the future
-        // if (timestamp < _timestampUntilGuaranteedNoDelay)
-        // {
-        //     // There are no delays to collect, early return
-        //     Console.WriteLine($"Timestamp {timestamp} < {_timestampUntilGuaranteedNoDelay}, skipping collection");
-        //     return;
-        // }
-
-        //Console.WriteLine($"Timestamp {timestamp} >= {_timestampUntilGuaranteedNoDelay}, collecting");
 
         Stack<T> completions = new();
         _lock.EnterWriteLock();
@@ -122,20 +107,15 @@ public class DelayTree2<T> : IDisposable
         {
             if (TryPeekNextDelay(timestamp, out uint nextDelayTimestamp))
             {
-                //Console.WriteLine($"Next delay in {nextDelayTimestamp - timestamp} ms. Next delay timestamp: {_timestampUntilGuaranteedNoDelay} -> {nextDelayTimestamp}");
                 Interlocked.Exchange(ref _nextDelayTimestampMs, nextDelayTimestamp);
-                //_timer.Change((int)(nextDelayTimestamp - timestamp), 10);
             }
             else
             {
                 Interlocked.Exchange(ref _nextDelayTimestampMs, 0);
-                //_timer.Change(-1, -1);
-                //Console.WriteLine($"No next delay");
             }
 
             if (timestamp < _lastTimestamp)
             {
-                //Console.WriteLine("[collect] Overflow");
                 CollectIterative(ref completions, _maxDelay, uint.MinValue, _lastTimestamp, _maxDelay);
                 CollectIterative(ref completions, _maxDelay, uint.MinValue, uint.MinValue, timestamp);
             }
@@ -144,14 +124,12 @@ public class DelayTree2<T> : IDisposable
                 CollectIterative(ref completions, _maxDelay, uint.MinValue, _lastTimestamp, timestamp);
             }
 
-            //Console.WriteLine($"Drill between {_lastTimestamp} and {timestamp} ({_lastTimestamp:B} and {timestamp:B})");
             _lastTimestamp = timestamp;
         }
         finally
         {
             _lock.ExitWriteLock();
         }
-        // Trigger completions out of the lock, as it might go back to the Delay method
         return completions;
     }
 
@@ -159,8 +137,6 @@ public class DelayTree2<T> : IDisposable
 
     private void CollectIterative(ref Stack<T> completions, uint currentMin, uint currentMax, uint min, uint max)
     {
-        //Console.WriteLine("[collect] Collect from " + min + " to " + max);
-
         // Push the initial state to the stack
         _pooledStack.Push(new StackNode(_root, _bitDepth, 0, currentMin, currentMax, null));
 
@@ -169,14 +145,12 @@ public class DelayTree2<T> : IDisposable
             // Terminal case - reached a leaf node
             if (stackNode.Depth == 0)
             {
-                //Console.WriteLine("[collect] Trigger task for time: " + stackNode.Current);
-                //Console.WriteLine($"[collect] Clearing reference: {stackNode.ClearRef != null}");
                 foreach (var item in stackNode.Node._items!)
                 {
                     completions.Push(item);
+                    Interlocked.Decrement(ref _count);
                 }
                 stackNode.ClearRef?.Invoke();
-                Interlocked.Decrement(ref _count);
                 continue;
             }
 
@@ -250,36 +224,5 @@ public class DelayTree2<T> : IDisposable
         {
             _one = null;
         }
-    }
-
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
-        {
-            //_lock.Dispose();
-        }
-    }
-
-    public void PrintTree()
-    {
-        void PrintNode(DelayTreeNode? node, int depth, uint current)
-        {
-            if (depth == 0)
-            {
-                Console.WriteLine($"- {current:B16} ({current} ms)");
-                return;
-            }
-
-            if (node._zero != null)
-            {
-                PrintNode(node._zero, depth - 1, current);
-            }
-            if (node._one != null)
-            {
-                PrintNode(node._one, depth - 1, current | 1u << (depth - 1));
-            }
-        }
-
-        PrintNode(_root, _bitDepth, 0);
     }
 }

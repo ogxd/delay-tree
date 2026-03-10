@@ -10,7 +10,6 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
     private readonly int _bitDepth;
     private readonly DelayTreeNode _root = new();
     private readonly Stopwatch _stopwatch;
-    private readonly IDelayTreeTimer _timer;
     private readonly T1 _completed;
     private readonly Stack<StackNode> _pooledStack = new();
     private readonly ReaderWriterLockSlim _lock = new();
@@ -27,11 +26,6 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
     }
     
     public DelayTree(int bitDepth)
-        : this(bitDepth, new DelayTreeThreadPoolTimer(10))
-    {
-    }
-    
-    public DelayTree(int bitDepth, IDelayTreeTimer timer)
     {
         _bitDepth = bitDepth;
         _maxDelay = uint.MaxValue >> (32 - bitDepth);
@@ -40,9 +34,6 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
         _completed = new T1();
         _completed.SetCompleted(false);
         _stopwatch = Stopwatch.StartNew();
-        
-        _timer = timer;
-        _timer.SetDelayTree(this);
     }
     
     public ulong Count => Interlocked.Read(ref _count);
@@ -286,7 +277,7 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            _timer.Dispose();
+            //_timer.Dispose();
             //_lock.Dispose();
         }
     }
