@@ -4,7 +4,7 @@ namespace Ogxd.DelayTree.Completions;
 
 public class TaskCompletion : ICompletion<Task>
 {
-    private readonly TaskCompletionSource _taskCompletionSource = new();
+    private readonly TaskCompletionSource _taskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public Task CompletionHandle => _taskCompletionSource.Task;
 

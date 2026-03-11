@@ -35,11 +35,10 @@ public class DelayTreeBenchmark
     [Params(10_000, 1_000_000)]
     public int Recursions { get; set; }
 
-    [Params(10)]
+    [Params(10, 1000)]
     public int Delay { get; set; }
 
-    private int GetRandomDelay(int _) =>
-        (int)(Delay * (0.8 + Random.Shared.NextDouble() * 0.4));
+    private int GetRandomDelay(int _) => (int)(Delay * (0.8 + Random.Shared.NextDouble() * 0.4));
 
     [GlobalSetup]
     public void Setup()
@@ -47,99 +46,53 @@ public class DelayTreeBenchmark
         _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
     }
 
-    // ── Baseline: Task.Delay ──────────────────────────────────────────────────
+    #region Task.Delay
+    
+    [Benchmark(Baseline = true, OperationsPerInvoke = 1)]
+    public async Task Task_Delay()
+    {
+        Task[] tasks = _delays.Select(Task.Delay).ToArray();
+        await Task.WhenAll(tasks);
+    }
+    
+    #endregion
 
-    // [Benchmark(Baseline = true, OperationsPerInvoke = 1)]
-    // public async Task Task_Delay()
-    // {
-    //     Task[] tasks = _delays.Select(Task.Delay).ToArray();
-    //     await Task.WhenAll(tasks);
-    // }
+    #region HashedWheelTimer
+    
+    private HashedWheelTimer? _wheelTimer;
+    
+    [GlobalSetup(Target = nameof(HashedWheelTimer_Delay))]
+    public void HashedWheelTimer_Setup()
+    {
+        _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
+        // Tick=20ms × 3277 ticks ≈ 65.5 s max (matches DelayTree 16-bit depth)
+        _wheelTimer = new HashedWheelTimer(
+            tickDuration: TimeSpan.FromMilliseconds(20),
+            ticksPerWheel: 3277,
+            maxPendingTimeouts: 0);
+    }
+    
+    [GlobalCleanup(Target = nameof(HashedWheelTimer_Delay))]
+    public void HashedWheelTimer_Cleanup()
+    {
+        _wheelTimer = null;
+    }
+    
+    [Benchmark(OperationsPerInvoke = 1)]
+    public async Task HashedWheelTimer_Delay()
+    {
+        Task[] tasks = _delays.Select(d => WrapWheelTimer((uint)d)).ToArray();
+        await Task.WhenAll(tasks);
+    }
+    
+    private async Task WrapWheelTimer(uint delay)
+    {
+        await _wheelTimer!.Delay(delay);
+    }
+    
+    #endregion
 
-    // ── HashedWheelTimer ─────────────────────────────────────────────────────
-    //
-    // private HashedWheelTimer? _wheelTimer;
-    //
-    // [GlobalSetup(Target = nameof(HashedWheelTimer_Delay))]
-    // public void HashedWheelTimer_Setup()
-    // {
-    //     _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
-    //     // Tick=20ms × 3277 ticks ≈ 65.5 s max (matches DelayTree 16-bit depth)
-    //     _wheelTimer = new HashedWheelTimer(
-    //         tickDuration: TimeSpan.FromMilliseconds(20),
-    //         ticksPerWheel: 3277,
-    //         maxPendingTimeouts: 0);
-    // }
-    //
-    // [GlobalCleanup(Target = nameof(HashedWheelTimer_Delay))]
-    // public void HashedWheelTimer_Cleanup()
-    // {
-    //     _wheelTimer = null;
-    // }
-    //
-    // [Benchmark(OperationsPerInvoke = 1)]
-    // public async Task HashedWheelTimer_Delay()
-    // {
-    //     Task[] tasks = _delays.Select(d => WrapWheelTimer((uint)d)).ToArray();
-    //     await Task.WhenAll(tasks);
-    // }
-    //
-    // private async Task WrapWheelTimer(uint delay)
-    // {
-    //     await _wheelTimer!.Delay(delay);
-    // }
-
-    // ── DelayTree (ThreadPool timer, 10ms tick) ───────────────────────────────
-
-    // private DelayTree<TaskCompletion, Task>? _delayTreeThreadPool;
-    //
-    // [GlobalSetup(Target = nameof(DelayTree_ThreadPool))]
-    // public void DelayTree_ThreadPool_Setup()
-    // {
-    //     _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
-    //     _delayTreeThreadPool = new DelayTree<TaskCompletion, Task>(32, new DelayTreeThreadPoolTimer(10));
-    // }
-    //
-    // [GlobalCleanup(Target = nameof(DelayTree_ThreadPool))]
-    // public void DelayTree_ThreadPool_Cleanup()
-    // {
-    //     _delayTreeThreadPool!.Dispose();
-    //     _delayTreeThreadPool = null;
-    // }
-    //
-    // [Benchmark(OperationsPerInvoke = 1)]
-    // public async Task DelayTree_ThreadPool()
-    // {
-    //     Task[] tasks = _delays.Select(d => _delayTreeThreadPool!.Delay((uint)d)).ToArray();
-    //     await Task.WhenAll(tasks);
-    // }
-    //
-    // // ── DelayTree (dedicated spinning thread) ─────────────────────────────────
-    //
-    // private DelayTree<TaskCompletion, Task>? _delayTreeDedicated;
-    //
-    // [GlobalSetup(Target = nameof(DelayTree_Dedicated))]
-    // public void DelayTree_Dedicated_Setup()
-    // {
-    //     _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
-    //     _delayTreeDedicated = new DelayTree<TaskCompletion, Task>(32, new DelayTreeDedicatedThreadTimer());
-    // }
-    //
-    // [GlobalCleanup(Target = nameof(DelayTree_Dedicated))]
-    // public void DelayTree_Dedicated_Cleanup()
-    // {
-    //     _delayTreeDedicated!.Dispose();
-    //     _delayTreeDedicated = null;
-    // }
-    //
-    // [Benchmark(OperationsPerInvoke = 1)]
-    // public async Task DelayTree_Dedicated()
-    // {
-    //     Task[] tasks = _delays.Select(d => _delayTreeDedicated!.Delay((uint)d)).ToArray();
-    //     await Task.WhenAll(tasks);
-    // }
-    //
-    // ── DelayTree (hybrid) ─────────────────────────────────
+    #region DelayTree
 
     private DelayTree<TaskCompletion, Task>? _delayTreeHybrid;
 
@@ -163,4 +116,6 @@ public class DelayTreeBenchmark
         Task[] tasks = _delays.Select(d => _delayTreeHybrid!.Delay((uint)d)).ToArray();
         await Task.WhenAll(tasks);
     }
+
+    #endregion
 }
