@@ -67,7 +67,10 @@ public class BdnRepro
         benchmarkThread.Join();
 
         Console.WriteLine($"Completed {totalCalls} calls in {sw.ElapsedMilliseconds}ms");
-        if (failure != null) Assert.Fail(failure);
+        if (failure != null)
+        {
+            Assert.Fail(failure);
+        }
     }
 
     [Test]

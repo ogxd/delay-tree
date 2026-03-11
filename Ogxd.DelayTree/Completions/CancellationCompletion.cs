@@ -18,7 +18,9 @@ public class CancellationCompletion : ICompletion<CancellationToken>
             var (source, shouldDispose) = state;
             source.Cancel();
             if (shouldDispose)
+            {
                 source.Dispose();
+            }
         }, (cts, dispose), preferLocal: false);
     }
 }

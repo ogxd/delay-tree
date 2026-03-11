@@ -42,8 +42,9 @@ public class DelayTreeHybridTimer : IDelayTreeTimer
                 }
                 else if (delay > 0)
                 {
-                    // Final millisecond: tight-spin for precision
-                    Thread.SpinWait(16);
+                    // Final millisecond: spin with enough iterations for ~µs precision
+                    // without burning as much CPU as SpinWait(16) in a tight loop
+                    Thread.SpinWait(1000);
                 }
                 else
                 {
