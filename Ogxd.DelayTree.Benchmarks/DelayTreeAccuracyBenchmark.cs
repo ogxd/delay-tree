@@ -1,45 +1,40 @@
 using BenchmarkDotNet.Attributes;
+using Ogxd.DelayTree.Completions;
+using Ogxd.DelayTree.Timers;
 
 namespace Ogxd.DelayTree.Benchmarks;
 
+/// <summary>
+/// Measures accuracy (wall time per sequential delay) for each timer backend.
+/// DelayTree's advantage is high concurrency, but accuracy still matters.
+/// </summary>
 [MemoryDiagnoser(false)]
-[CpuDiagnoser]
 [ThreadingDiagnoser]
 public class DelayTreeAccuracyBenchmark
 {
-    private DelayTree<TaskCompletion, Task>? _delayTree;
-
-    [Params(1, /*2, 5,*/ 10)]
+    [Params(1, 10)]
     public int Delay { get; set; }
-
-    [GlobalSetup(Target = nameof(DelayTree_Delay))]
-    public void Setup()
-    {
-        _delayTree = new(16);
-    }
-
-    [GlobalCleanup(Target = nameof(DelayTree_Delay))]
-    public void Cleanup()
-    {
-        _delayTree!.Dispose();
-        _delayTree = null;
-    }
 
     [Benchmark(Baseline = true, OperationsPerInvoke = 100)]
     public async Task Task_Delay()
     {
         for (int i = 0; i < 100; i++)
-        {
             await Task.Delay(Delay);
-        }
     }
 
+    private DelayTree<TaskCompletion, Task>? _hybrid;
+
+    [GlobalSetup(Target = nameof(DelayTree_Hybrid))]
+    public void Hybrid_Setup() =>
+        _hybrid = new DelayTree<TaskCompletion, Task>(16, new DelayTreeHybridTimer());
+
+    [GlobalCleanup(Target = nameof(DelayTree_Hybrid))]
+    public void Hybrid_Cleanup() { _hybrid!.Dispose(); _hybrid = null; }
+
     [Benchmark(OperationsPerInvoke = 100)]
-    public async Task DelayTree_Delay()
+    public async Task DelayTree_Hybrid()
     {
         for (int i = 0; i < 100; i++)
-        {
-            await _delayTree!.Delay((uint)Delay);
-        }
+            await _hybrid!.Delay((uint)Delay);
     }
 }

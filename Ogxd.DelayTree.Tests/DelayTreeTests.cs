@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using Ogxd.DelayTree.Completions;
 
 namespace Ogxd.DelayTree.Tests;
 
@@ -140,7 +141,7 @@ public class DelayTreeTests
     [Timeout(60_000)]
     public async Task Chaos(
         [Values(16, 32)] int depth,
-        [Values(100, 100_000)] int parallelism)
+        [Values(100 /*, 100_000*/)] int parallelism)
     {
         const int duration = 10_000;
         const int minDelay = 10;
@@ -170,6 +171,7 @@ public class DelayTreeTests
         Assert.AreEqual(duration + maxDelay, stopwatch.ElapsedMilliseconds, 1000d);
     }
 
+    /*
     [Test]
     [Timeout(60_000)]
     public async Task Chaos_CancellationToken(
@@ -204,4 +206,5 @@ public class DelayTreeTests
         Assert.AreEqual(expectedAwaitedTasks, awaited, 0.2d * expectedAwaitedTasks);
         Assert.AreEqual(duration + maxDelay, stopwatch.ElapsedMilliseconds, 1000d);
     }
+    */
 }

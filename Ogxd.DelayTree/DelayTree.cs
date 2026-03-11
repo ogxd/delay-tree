@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using Ogxd.DelayTree.Completions;
+using Ogxd.DelayTree.Timers;
 
 namespace Ogxd.DelayTree;
 
@@ -13,237 +15,221 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
     private readonly IDelayTreeTimer _timer;
     private readonly T1 _completed;
     private readonly Stack<StackNode> _pooledStack = new();
+    private readonly Stack<(DelayTreeNode Node, int Depth, uint Current)> _pooledPeekStack = new();
+    private readonly Stack<T1> _pooledCompletions = new();
     private readonly ReaderWriterLockSlim _lock = new();
+    // _maxDelay is the timestamp space size: 2^bitDepth (or uint.MaxValue for bitDepth=32)
     private readonly uint _maxDelay;
+    // _bitMask has all bitDepth lower bits set, used as initial Current in trie traversal
+    private readonly uint _bitMask;
     private long _disposed = 0;
     private uint _lastTimestamp = 0;
     private ulong _count;
-
-    private uint _nextDelayTimestampMs = uint.MaxValue;
+    private volatile uint _nextDelayTimestampMs = uint.MaxValue;
 
     public DelayTree()
         : this(32)
     {
     }
-    
+
     public DelayTree(int bitDepth)
-        : this(bitDepth, new DelayTreeThreadPoolTimer(10))
+        : this(bitDepth, new DelayTreeHybridTimer())
     {
     }
-    
+
     public DelayTree(int bitDepth, IDelayTreeTimer timer)
     {
         _bitDepth = bitDepth;
-        _maxDelay = uint.MaxValue >> (32 - bitDepth);
-        
-        // A reusable completion that is already completed
+        _maxDelay = bitDepth < 32 ? (1u << bitDepth) : uint.MaxValue;
+        _bitMask = bitDepth < 32 ? (1u << bitDepth) - 1u : uint.MaxValue;
+
         _completed = new T1();
         _completed.SetCompleted(false);
         _stopwatch = Stopwatch.StartNew();
-        
+
         _timer = timer;
         _timer.SetDelayTree(this);
     }
-    
+
     public ulong Count => Interlocked.Read(ref _count);
     public uint CurrentTimestampMs => (uint)(_stopwatch.ElapsedMilliseconds % _maxDelay);
     public uint NextDelayTimestampMs => _nextDelayTimestampMs;
-    
+
     public T2 Delay(uint delay)
     {
         if (delay >= _maxDelay)
-        {
             throw new ArgumentOutOfRangeException(nameof(delay), "Delay is too large for the bit depth.");
-        }
 
         if (delay == 0)
-        {
             return _completed.CompletionHandle;
-        }
-        
-        uint timestamp = CurrentTimestampMs;
-        uint timestampDelay = timestamp + delay;
-        timestampDelay %= _maxDelay;
 
-        _lock.EnterReadLock(); // Can happen concurrently thanks to Interlocked semantics
+        uint timestamp = CurrentTimestampMs;
+        uint timestampDelay = (timestamp + delay) % _maxDelay;
+
+        bool isEarlierDeadline = false;
+        T2 handle;
+
+        _lock.EnterReadLock();
         try
         {
-            // Here or after modulo?
             if (timestampDelay < _nextDelayTimestampMs)
             {
-                Interlocked.Exchange(ref _nextDelayTimestampMs, timestampDelay);
-                //_timer.Change(delay, -1);
-                //Console.WriteLine($"Timestamp {timestamp} + delay {delay} = {timestampDelay} < {_timestampUntilGuaranteedNoDelay}, setting timer to {delay}");
+                _nextDelayTimestampMs = timestampDelay;
+                isEarlierDeadline = true;
             }
 
-            // Timestamps are wrapped around the max delay the tree can handle
-            
-            //Console.WriteLine("[add] Creating task expiring in: " + delay);
-
-            DelayTreeNode? node = _root;
+            DelayTreeNode node = _root;
             for (int i = _bitDepth - 1; i >= 0; i--)
             {
-                long bit = timestampDelay & (1 << i);
-                if (bit == 0)
+                if ((timestampDelay & (1u << i)) == 0)
                 {
                     if (node._zero == null)
-                    {
                         Interlocked.CompareExchange(ref node._zero, new DelayTreeNode(), null);
-                    }
-
-                    node = node._zero;
+                    node = node._zero!;
                 }
                 else
                 {
                     if (node._one == null)
-                    {
                         Interlocked.CompareExchange(ref node._one, new DelayTreeNode(), null);
-                    }
-
-                    node = node._one;
+                    node = node._one!;
                 }
             }
 
-            return node.GetCompletionHandle(ref _count);
+            handle = node.GetCompletionHandle(ref _count);
         }
         finally
         {
             _lock.ExitReadLock();
         }
+
+        // Notify outside the lock: waking the timer while holding ReadLock would cause
+        // the timer's WriteLock attempt to block all subsequent ReadLock acquisitions.
+        if (isEarlierDeadline)
+            _timer.NotifyEarlierDelay();
+
+        return handle;
     }
 
     public void Collect(uint timestamp)
     {
-        // Fast path - no delays to collect because the tree is empty
-        // if (Interlocked.Read(ref _count) == 0)
-        // {
-        //     return;
-        // }
-        
-        //uint timestamp = GetTimestampMs();
-        
-        // Fast path - no delays to collect because we know the next delay is in the future
-        // if (timestamp < _timestampUntilGuaranteedNoDelay)
-        // {
-        //     // There are no delays to collect, early return
-        //     Console.WriteLine($"Timestamp {timestamp} < {_timestampUntilGuaranteedNoDelay}, skipping collection");
-        //     return;
-        // }
+        // Fast path: nothing in the tree
+        if (Interlocked.Read(ref _count) == 0)
+            return;
 
-        //Console.WriteLine($"Timestamp {timestamp} >= {_timestampUntilGuaranteedNoDelay}, collecting");
+        // Fast path: next due delay is still in the future
+        if (timestamp < _nextDelayTimestampMs)
+            return;
 
-        Stack<T1> completions = new();
         _lock.EnterWriteLock();
         try
         {
-            if (TryPeekNextDelay(timestamp, out uint nextDelayTimestamp))
-            {
-                //Console.WriteLine($"Next delay in {nextDelayTimestamp - timestamp} ms. Next delay timestamp: {_timestampUntilGuaranteedNoDelay} -> {nextDelayTimestamp}");
-                Interlocked.Exchange(ref _nextDelayTimestampMs, nextDelayTimestamp);
-                //_timer.Change((int)(nextDelayTimestamp - timestamp), 10);
-            }
-            else
-            {
-                Interlocked.Exchange(ref _nextDelayTimestampMs, 0);
-                //_timer.Change(-1, -1);
-                //Console.WriteLine($"No next delay");
-            }
+            _nextDelayTimestampMs = TryPeekNextDelay(timestamp, out uint nextDelayTimestamp)
+                ? nextDelayTimestamp
+                : uint.MaxValue;
 
             if (timestamp < _lastTimestamp)
             {
-                //Console.WriteLine("[collect] Overflow");
-                CollectIterative(ref completions, _maxDelay, uint.MinValue, _lastTimestamp, _maxDelay);
-                CollectIterative(ref completions, _maxDelay, uint.MinValue, uint.MinValue, timestamp);
+                // Timestamp wrapped around: collect [_lastTimestamp, _bitMask] then [0, timestamp]
+                CollectIterative(_bitMask, uint.MinValue, _lastTimestamp, _bitMask);
+                CollectIterative(_bitMask, uint.MinValue, uint.MinValue, timestamp);
             }
             else if (timestamp > _lastTimestamp)
             {
-                CollectIterative(ref completions, _maxDelay, uint.MinValue, _lastTimestamp, timestamp);
+                CollectIterative(_bitMask, uint.MinValue, _lastTimestamp, timestamp);
             }
 
-            //Console.WriteLine($"Drill between {_lastTimestamp} and {timestamp} ({_lastTimestamp:B} and {timestamp:B})");
             _lastTimestamp = timestamp;
         }
         finally
         {
             _lock.ExitWriteLock();
-            // Trigger completions out of the lock, as it might go back to the Delay method
-            while (completions.TryPop(out T1? tcs))
-            {
+            // Fire completions outside the lock: a completion may call back into Delay
+            while (_pooledCompletions.TryPop(out T1? tcs))
                 tcs.SetCompleted(true);
-            }
         }
     }
 
     private record struct StackNode(DelayTreeNode Node, int Depth, uint Current, uint CurrentMin, uint CurrentMax, Action? ClearRef);
 
-    private void CollectIterative(ref Stack<T1> completions, uint currentMin, uint currentMax, uint min, uint max)
+    private void CollectIterative(uint currentMin, uint currentMax, uint min, uint max)
     {
-        //Console.WriteLine("[collect] Collect from " + min + " to " + max);
-
-        // Push the initial state to the stack
         _pooledStack.Push(new StackNode(_root, _bitDepth, 0, currentMin, currentMax, null));
 
-        while (_pooledStack.TryPop(out StackNode stackNode))
+        try
         {
-            // Terminal case - reached a leaf node
-            if (stackNode.Depth == 0)
+            while (_pooledStack.TryPop(out StackNode stackNode))
             {
-                //Console.WriteLine("[collect] Trigger task for time: " + stackNode.Current);
-                //Console.WriteLine($"[collect] Clearing reference: {stackNode.ClearRef != null}");
-                completions.Push(stackNode.Node.TaskCompletionSource!);
-                stackNode.ClearRef?.Invoke();
-                Interlocked.Decrement(ref _count);
-                continue;
-            }
+                if (stackNode.Depth == 0)
+                {
+                    _pooledCompletions.Push(stackNode.Node.TaskCompletionSource!);
+                    stackNode.ClearRef?.Invoke();
+                    Interlocked.Decrement(ref _count);
+                    continue;
+                }
 
-            bool hasTwoBranches = stackNode.Node == _root || stackNode.Node is { _zero: not null, _one: not null };
-            uint depthBit = 1u << (stackNode.Depth - 1);
-            uint newCurrentMin = stackNode.CurrentMin & ~depthBit;
-            uint newCurrentMax = stackNode.CurrentMax | depthBit;
+                bool hasTwoBranches = stackNode.Node == _root || stackNode.Node is { _zero: not null, _one: not null };
+                uint depthBit = 1u << (stackNode.Depth - 1);
+                uint newCurrentMin = stackNode.CurrentMin & ~depthBit;
+                uint newCurrentMax = stackNode.CurrentMax | depthBit;
 
-            // Check zero branch
-            if (stackNode.Node._zero != null && newCurrentMin >= min)
-            {
-                _pooledStack.Push(new StackNode(stackNode.Node._zero, stackNode.Depth - 1, stackNode.Current & ~depthBit, newCurrentMin, stackNode.CurrentMax, hasTwoBranches ? stackNode.Node.ClearZero : stackNode.ClearRef));
-            }
+                if (stackNode.Node._zero != null && newCurrentMin >= min)
+                    _pooledStack.Push(new StackNode(
+                        stackNode.Node._zero,
+                        stackNode.Depth - 1,
+                        stackNode.Current & ~depthBit,
+                        newCurrentMin,
+                        stackNode.CurrentMax,
+                        hasTwoBranches ? stackNode.Node._clearZeroAction : stackNode.ClearRef));
 
-            // Check one branch
-            if (stackNode.Node._one != null && newCurrentMax <= max)
-            {
-                _pooledStack.Push(new StackNode(stackNode.Node._one, stackNode.Depth - 1, stackNode.Current | depthBit, stackNode.CurrentMin, newCurrentMax, hasTwoBranches ? stackNode.Node.ClearOne : stackNode.ClearRef));
+                if (stackNode.Node._one != null && newCurrentMax <= max)
+                    _pooledStack.Push(new StackNode(
+                        stackNode.Node._one,
+                        stackNode.Depth - 1,
+                        stackNode.Current | depthBit,
+                        stackNode.CurrentMin,
+                        newCurrentMax,
+                        hasTwoBranches ? stackNode.Node._clearOneAction : stackNode.ClearRef));
             }
+        }
+        finally
+        {
+            _pooledStack.Clear(); // Exception safety: leave stack clean for next call
         }
     }
 
     private bool TryPeekNextDelay(uint min, out uint nextDelayTimestamp)
     {
-        // LIFO needed for DFS, so we stop on the minimum
-        var stack = new Stack<(DelayTreeNode, int, uint)>();
-        stack.Push((_root, _bitDepth, _maxDelay));
+        // DFS with LIFO: zero branch pushed last → popped first → explores smaller values first
+        _pooledPeekStack.Push((_root, _bitDepth, _bitMask));
 
-        while (stack.TryPop(out (DelayTreeNode Node, int Depth, uint Current) stackNode))
+        try
         {
-            // Terminal case - reached a leaf node
-            if (stackNode.Depth == 0 && stackNode.Current > min)
+            while (_pooledPeekStack.TryPop(out var stackNode))
             {
-                nextDelayTimestamp = stackNode.Current;
-                return true; // stop
-            }
+                if (stackNode.Depth == 0)
+                {
+                    if (stackNode.Current > min)
+                    {
+                        nextDelayTimestamp = stackNode.Current;
+                        return true;
+                    }
+                    continue;
+                }
 
-            uint depthBit = 1u << (stackNode.Depth - 1);
-            uint currentZero = stackNode.Current & ~depthBit;
+                uint depthBit = 1u << (stackNode.Depth - 1);
+                uint currentZero = stackNode.Current & ~depthBit;
 
-            // Check one branch first, because we want to check zero last for the DFS min
-            if (stackNode.Node._one != null)
-            {
-                stack.Push((stackNode.Node._one, stackNode.Depth - 1, stackNode.Current));
-            }
+                // Push one first so zero is popped first (smaller values explored first)
+                if (stackNode.Node._one != null)
+                    _pooledPeekStack.Push((stackNode.Node._one, stackNode.Depth - 1, stackNode.Current));
 
-            // Check zero branch
-            if (stackNode.Node._zero != null && currentZero >= min)
-            {
-                stack.Push((stackNode.Node._zero, stackNode.Depth - 1, currentZero));
+                if (stackNode.Node._zero != null && currentZero >= min)
+                    _pooledPeekStack.Push((stackNode.Node._zero, stackNode.Depth - 1, currentZero));
             }
+        }
+        finally
+        {
+            _pooledPeekStack.Clear(); // Exception safety + early-return cleanup
         }
 
         nextDelayTimestamp = 0;
@@ -254,32 +240,31 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
     {
         public DelayTreeNode? _zero;
         public DelayTreeNode? _one;
-
         private T1? _taskCompletionSource;
         public T1? TaskCompletionSource => _taskCompletionSource;
+
+        // Cached to avoid per-traversal delegate allocation
+        internal readonly Action _clearZeroAction;
+        internal readonly Action _clearOneAction;
+
+        public DelayTreeNode()
+        {
+            _clearZeroAction = ClearZero;
+            _clearOneAction = ClearOne;
+        }
 
         public T2 GetCompletionHandle(ref ulong count)
         {
             if (_taskCompletionSource == null)
             {
                 if (Interlocked.CompareExchange(ref _taskCompletionSource, new T1(), null) == null)
-                {
                     Interlocked.Increment(ref count);
-                }
             }
-
-            return _taskCompletionSource.CompletionHandle;
+            return _taskCompletionSource!.CompletionHandle;
         }
 
-        public void ClearZero()
-        {
-            _zero = null;
-        }
-
-        public void ClearOne()
-        {
-            _one = null;
-        }
+        public void ClearZero() => _zero = null;
+        public void ClearOne() => _one = null;
     }
 
     public void Dispose()
@@ -287,7 +272,7 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
             _timer.Dispose();
-            //_lock.Dispose();
+            _lock.Dispose();
         }
     }
 
@@ -301,14 +286,10 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
                 return;
             }
 
-            if (node._zero != null)
-            {
+            if (node!._zero != null)
                 PrintNode(node._zero, depth - 1, current);
-            }
             if (node._one != null)
-            {
                 PrintNode(node._one, depth - 1, current | 1u << (depth - 1));
-            }
         }
 
         PrintNode(_root, _bitDepth, 0);

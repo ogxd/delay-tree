@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace Ogxd.DelayTree;
+namespace Ogxd.DelayTree.Completions;
 
 public class TaskCompletion : ICompletion<Task>
 {

@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace Ogxd.DelayTree;
+namespace Ogxd.DelayTree.Completions;
 
 public class CancellationCompletion : ICompletion<CancellationToken>
 {

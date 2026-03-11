@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ogxd.DelayTree;
 using HarmonyLib;
+using Ogxd.DelayTree.Completions;
 
 namespace Ogxd.DelayTree;
 
