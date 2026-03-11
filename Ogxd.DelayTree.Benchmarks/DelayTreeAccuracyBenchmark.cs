@@ -19,7 +19,9 @@ public class DelayTreeAccuracyBenchmark
     public async Task Task_Delay()
     {
         for (int i = 0; i < 100; i++)
+        {
             await Task.Delay(Delay);
+        }
     }
 
     private DelayTree<TaskCompletion, Task>? _hybrid;

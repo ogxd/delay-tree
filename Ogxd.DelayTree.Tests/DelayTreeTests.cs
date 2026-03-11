@@ -139,7 +139,7 @@ public class DelayTreeTests
 
     [Test]
     [Timeout(30_000)]
-    public async Task Chaos(
+    public async Task Chaos_Task(
         [Values(16, 32)] int depth,
         [Values(100, 100_000)] int parallelism)
     {
@@ -147,7 +147,41 @@ public class DelayTreeTests
         const int minDelay = 10;
         const int maxDelay = 2000;
 
-        using DelayTree<TaskCompletion, Task> delayTree = new(depth); // 256ms max delay
+        using DelayTree<TaskCompletion, Task> delayTree = new(depth);
+
+        int awaited = 0;
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        Task[] tasks = Enumerable.Range(0, parallelism).Select(async _ =>
+        {
+            while (stopwatch.ElapsedMilliseconds < duration)
+            {
+                await delayTree.Delay((uint)Random.Shared.Next(minDelay, maxDelay));
+                Interlocked.Increment(ref awaited);
+            }
+        }).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        stopwatch.Stop();
+
+        double expectedAwaitedTasks = 1d * parallelism * duration / ((maxDelay - minDelay) / 2d);
+        Assert.AreEqual(expectedAwaitedTasks, awaited, 0.2d * expectedAwaitedTasks);
+        Assert.AreEqual(duration + maxDelay, stopwatch.ElapsedMilliseconds, 1000d);
+    }
+    
+    [Test]
+    [Timeout(30_000)]
+    public async Task Chaos_ValueTask(
+        [Values(16, 32)] int depth,
+        [Values(100, 100_000)] int parallelism)
+    {
+        const int duration = 10_000;
+        const int minDelay = 10;
+        const int maxDelay = 2000;
+
+        using DelayTree<ValueTaskCompletion, ValueTask> delayTree = new(depth);
 
         int awaited = 0;
 
@@ -181,7 +215,7 @@ public class DelayTreeTests
         const int minDelay = 10;
         const int maxDelay = 2000;
 
-        using DelayTree<CancellationCompletion, CancellationToken> delayTree = new(depth); // 256ms max delay
+        using DelayTree<CancellationCompletion, CancellationToken> delayTree = new(depth);
 
         int awaited = 0;
 
