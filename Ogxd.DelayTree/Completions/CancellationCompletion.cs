@@ -10,10 +10,15 @@ public class CancellationCompletion : ICompletion<CancellationToken>
 
     public void SetCompleted(bool dispose)
     {
-        _cancellationTokenSource.Cancel();
-        if (dispose)
+        // CancellationTokenSource.Cancel() invokes registered callbacks synchronously,
+        // which would block the timer thread. Queue to thread pool like RunContinuationsAsynchronously.
+        var cts = _cancellationTokenSource;
+        ThreadPool.UnsafeQueueUserWorkItem(static state =>
         {
-            _cancellationTokenSource.Dispose();
-        }
+            var (source, shouldDispose) = state;
+            source.Cancel();
+            if (shouldDispose)
+                source.Dispose();
+        }, (cts, dispose), preferLocal: false);
     }
 }

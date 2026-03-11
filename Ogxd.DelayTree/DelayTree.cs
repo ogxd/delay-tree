@@ -123,9 +123,12 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
         _lock.EnterWriteLock();
         try
         {
-            _nextDelayTimestampMs = TryPeekNextDelay(timestamp, out uint nextDelayTimestamp)
-                ? nextDelayTimestamp
-                : uint.MaxValue;
+            // Find next deadline strictly after current timestamp.
+            // If none found, items may have post-wrap timestamps (≤ current timestamp);
+            // find the global minimum so the timer wakes up correctly after the wrap.
+            if (!TryPeekNextDelay(timestamp, out uint nextDelayTimestamp) && !TryPeekMinDelay(out nextDelayTimestamp))
+                nextDelayTimestamp = uint.MaxValue;
+            _nextDelayTimestampMs = nextDelayTimestamp;
 
             if (timestamp < _lastTimestamp)
             {
@@ -195,6 +198,41 @@ public class DelayTree<T1, T2> : IDelayTree, IDisposable where T1 : class, IComp
         {
             _pooledStack.Clear(); // Exception safety: leave stack clean for next call
         }
+    }
+
+    private bool TryPeekMinDelay(out uint nextDelayTimestamp)
+    {
+        // DFS with zero-first: finds the absolute minimum timestamp in the trie (no lower bound)
+        _pooledPeekStack.Push((_root, _bitDepth, _bitMask));
+
+        try
+        {
+            while (_pooledPeekStack.TryPop(out var stackNode))
+            {
+                if (stackNode.Depth == 0)
+                {
+                    nextDelayTimestamp = stackNode.Current;
+                    return true;
+                }
+
+                uint depthBit = 1u << (stackNode.Depth - 1);
+                uint currentZero = stackNode.Current & ~depthBit;
+
+                // Push one first so zero is popped first (smaller values explored first)
+                if (stackNode.Node._one != null)
+                    _pooledPeekStack.Push((stackNode.Node._one, stackNode.Depth - 1, stackNode.Current));
+
+                if (stackNode.Node._zero != null)
+                    _pooledPeekStack.Push((stackNode.Node._zero, stackNode.Depth - 1, currentZero));
+            }
+        }
+        finally
+        {
+            _pooledPeekStack.Clear();
+        }
+
+        nextDelayTimestamp = uint.MaxValue;
+        return false;
     }
 
     private bool TryPeekNextDelay(uint min, out uint nextDelayTimestamp)
