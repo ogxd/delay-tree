@@ -1,18 +1,18 @@
 # Delay Tree
 
-A binary trie data structure for efficiently scheduling large numbers of concurrent delays and timeouts in .NET — far faster, lighter, and less CPU-hungry than `Task.Delay` or a hashed wheel timer at scale.
+A binary trie data structure for efficiently scheduling large numbers of concurrent delays and timeouts in .NET: far faster, lighter, and less CPU-hungry than `Task.Delay` or a hashed wheel timer at scale.
 
 ## Why
 
 `Task.Delay` and `CancellationTokenSource` are convenient, but each call allocates a dedicated timer callback on the thread pool. At high concurrency this causes:
 
-- **Thread pool flooding** — 1 million concurrent delays → 1 million work items queued
-- **Heavy allocations** — each delay allocates its own `Task`, callback, and timer state
-- **Lock contention** — the runtime's internal timer queue becomes a bottleneck
+- **Thread pool flooding**: 1 million concurrent delays → 1 million work items queued
+- **Heavy allocations**: each delay allocates its own `Task`, callback, and timer state
+- **Lock contention**: the runtime's internal timer queue becomes a bottleneck
 
 See the underlying runtime issue: https://github.com/dotnet/runtime/issues/9114
 
-DelayTree solves this by sharing a single background timer across all pending delays and using a binary trie to track expiry times efficiently. Multiple delays expiring at the same millisecond share a single trie node — zero additional cost per extra waiter.
+DelayTree solves this by sharing a single background timer across all pending delays and using a binary trie to track expiry times efficiently. Multiple delays expiring at the same millisecond share a single trie node for zero additional cost per extra waiter.
 
 ## Performance
 
@@ -89,7 +89,7 @@ BclPatch.Apply(new DelayTree<TaskCompletion, Task>(16));
 
 Each pending delay is stored in a binary trie (radix tree) keyed by its **expiry timestamp** (current time + requested delay, in milliseconds, modulo the timestamp space).
 
-The timestamp is a `uint` of `bitDepth` bits. Each bit selects a branch at each trie level — `0` goes left, `1` goes right — so the path from root to a leaf spells out the binary representation of the expiry time:
+The timestamp is a `uint` of `bitDepth` bits. Each bit selects a branch at each trie level: `0` goes left, `1` goes right, so the path from root to a leaf spells out the binary representation of the expiry time:
 
 ```
 Expiry = 0b1011 (= 11 ms)
@@ -101,7 +101,7 @@ root
                    └─1─ leaf  ← completion fires at t=11
 ```
 
-**Key property:** the left subtree of any node always contains smaller timestamps than the right subtree. The trie is an implicit sorted structure — no sorting pass needed at collection time.
+**Key property:** the left subtree of any node always contains smaller timestamps than the right subtree. The trie is an implicit sorted structure, so no sorting pass is needed at collection time.
 
 **Key insight:** multiple callers requesting a delay that resolves to the same millisecond share the exact same leaf node. One `TaskCompletionSource` satisfies all of them simultaneously, which is why allocated memory stays near-zero even at 1 million concurrent delays.
 
@@ -145,7 +145,7 @@ root
 # Build
 dotnet build
 
-# Run all tests (must run sequentially — chaos tests saturate the CPU)
+# Run all tests (must run sequentially, chaos tests saturate the CPU)
 dotnet test Ogxd.DelayTree.Tests
 
 # Run a single test
