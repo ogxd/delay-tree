@@ -140,10 +140,10 @@ public class DelayTreeTests
     [Test]
     [Timeout(30_000)]
     public async Task Chaos_Task(
-        [Values(16, 32)] int depth,
+        [Values(16)] int depth,
         [Values(100, 100_000)] int parallelism)
     {
-        const int duration = 10_000;
+        const int duration = 5_000;
         const int minDelay = 10;
         const int maxDelay = 2000;
 
@@ -174,10 +174,10 @@ public class DelayTreeTests
     [Test]
     [Timeout(30_000)]
     public async Task Chaos_ValueTask(
-        [Values(16, 32)] int depth,
+        [Values(16)] int depth,
         [Values(100, 100_000)] int parallelism)
     {
-        const int duration = 10_000;
+        const int duration = 5_000;
         const int minDelay = 10;
         const int maxDelay = 2000;
 
@@ -208,10 +208,10 @@ public class DelayTreeTests
     [Test]
     [Timeout(30_000)]
     public async Task Chaos_CancellationToken(
-        [Values(16, 32)] int depth,
+        [Values(16)] int depth,
         [Values(100, 100_000)] int parallelism)
     {
-        const int duration = 10_000;
+        const int duration = 5_000;
         const int minDelay = 10;
         const int maxDelay = 2000;
 

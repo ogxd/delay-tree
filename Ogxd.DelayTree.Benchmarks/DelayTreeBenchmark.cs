@@ -83,7 +83,10 @@ public class DelayTreeBenchmark
             _tasks[i] = Task.Delay(_delays[i]);
         }
 
-        await Task.WhenAll(_tasks.AsSpan());
+        foreach (Task task in _tasks)
+        {
+            await task;
+        }
     }
 
     #endregion
@@ -119,7 +122,10 @@ public class DelayTreeBenchmark
             _tasks[i] = WrapWheelTimer((uint)_delays[i]);
         }
 
-        await Task.WhenAll(_tasks.AsSpan());
+        foreach (Task task in _tasks)
+        {
+            await task;
+        }
     }
 
     private async Task WrapWheelTimer(uint delay)
@@ -131,30 +137,66 @@ public class DelayTreeBenchmark
 
     #region DelayTree
 
-    private DelayTree<ValueTaskCompletion, ValueTask>? _delayTreeHybrid;
+    private DelayTree<TaskCompletion, Task>? _delayTree;
 
-    [GlobalSetup(Target = nameof(DelayTree_Hybrid))]
-    public void DelayTree_Hybrid_Setup()
+    [GlobalSetup(Target = nameof(DelayTree))]
+    public void DelayTree_Setup()
     {
         _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
         _tasks = new Task[Recursions];
         _valueTasks = new ValueTask[Recursions];
-        _delayTreeHybrid = new DelayTree<ValueTaskCompletion, ValueTask>(16, new DelayTreeHybridTimer());
+        _delayTree = new DelayTree<TaskCompletion, Task>(16, new DelayTreeHybridTimer());
     }
 
-    [GlobalCleanup(Target = nameof(DelayTree_Hybrid))]
-    public void DelayTree_Hybrid_Cleanup()
+    [GlobalCleanup(Target = nameof(DelayTree))]
+    public void DelayTree_Cleanup()
     {
-        _delayTreeHybrid!.Dispose();
-        _delayTreeHybrid = null;
+        _delayTree!.Dispose();
+        _delayTree = null;
     }
 
     [Benchmark(OperationsPerInvoke = 1)]
-    public async Task DelayTree_Hybrid()
+    public async Task DelayTree()
     {
         for (int i = 0; i < _delays.Length; i++)
         {
-            _valueTasks[i] = _delayTreeHybrid!.Delay((uint)_delays[i]);
+            _tasks[i] = _delayTree!.Delay((uint)_delays[i]);
+        }
+
+        foreach (Task task in _tasks)
+        {
+            await task;
+        }
+    }
+
+    #endregion
+    
+    #region DelayTree ValueTask
+
+    private DelayTree<ValueTaskCompletion, ValueTask>? _delayTreeValueTask;
+
+    [GlobalSetup(Target = nameof(DelayTree_ValueTask))]
+    public void DelayTree_ValueTask_Setup()
+    {
+        _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
+        _tasks = new Task[Recursions];
+        _valueTasks = new ValueTask[Recursions];
+        _delayTreeValueTask = new DelayTree<ValueTaskCompletion, ValueTask>(16, new DelayTreeHybridTimer());
+    }
+
+    [GlobalCleanup(Target = nameof(DelayTree_ValueTask))]
+    public void DelayTree_ValueTask_Cleanup()
+    {
+        _delayTreeValueTask!.Dispose();
+        _delayTreeValueTask = null;
+    }
+
+    [Benchmark(OperationsPerInvoke = 1)]
+    public async Task DelayTree_ValueTask()
+    {
+        for (int i = 0; i < _delays.Length; i++)
+        {
+            _valueTasks[i] = _delayTreeValueTask!.Delay((uint)_delays[i]);
         }
 
         foreach (ValueTask valueTask in _valueTasks)
