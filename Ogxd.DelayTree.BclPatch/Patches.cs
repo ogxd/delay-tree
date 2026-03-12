@@ -1,15 +1,16 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Ogxd.DelayTree;
 using HarmonyLib;
+using Ogxd.DelayTree.Completions;
 
 namespace Ogxd.DelayTree;
 
 [HarmonyPatch(typeof(Task), nameof(Task.Delay), [typeof(uint), typeof(TimeProvider), typeof(CancellationToken)])]
 public class TaskDelayPatch
 {
-    private static readonly DelayTree<TaskCompletion, Task> _DelayTree = new(16, 10);
+    private static readonly DelayTree<TaskCompletion, Task> _DelayTree = new(16);
 
     static bool Prefix(ref Task __result, uint millisecondsDelay, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
@@ -26,7 +27,7 @@ public class TaskDelayPatch
 [HarmonyPatch(typeof(CancellationTokenSource), "InitializeWithTimer", [typeof(TimeSpan), typeof(TimeProvider)])]
 public class CancellationTokenPatch
 {
-    private static readonly DelayTree<CancellationCompletion, CancellationToken> _DelayTree = new(16, 10);
+    private static readonly DelayTree<CancellationCompletion, CancellationToken> _DelayTree = new(16);
 
     static bool Prefix(CancellationTokenSource __instance, TimeSpan millisecondsDelay, TimeProvider timeProvider)
     {

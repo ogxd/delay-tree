@@ -1,4 +1,4 @@
-namespace Ogxd.DelayTree;
+namespace Ogxd.DelayTree.Completions;
 
 public interface ICompletion<out T>
 {
