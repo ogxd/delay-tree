@@ -6,41 +6,23 @@ using Ogxd.DelayTree.Timers;
 
 namespace Ogxd.DelayTree.Benchmarks;
 
-// | Method                 | Recursions | Delay | Mean        | Error     | StdDev     | Ratio | RatioSD | Completed Work Items | Lock Contentions | CPU Time    | Allocated    | Alloc Ratio |
-// |----------------------- |----------- |------ |------------:|----------:|-----------:|------:|--------:|---------------------:|-----------------:|------------:|-------------:|------------:|
-// | Task_Delay             | 10000      | 10    |    16.47 ms |  0.405 ms |   1.174 ms |  1.01 |    0.10 |           10000.0000 |           9.6875 |   15.806 ms |   1640.86 KB |        1.00 |                                                                                                                     
-// | HashedWheelTimer_Delay | 10000      | 10    |    23.88 ms |  0.477 ms |   1.368 ms |  1.46 |    0.13 |           10000.0000 |                - |    9.976 ms |   3984.73 KB |        2.43 |
-// | DelayTree_Hybrid       | 10000      | 10    |    12.67 ms |  0.130 ms |   0.115 ms |  0.77 |    0.06 |           10000.0000 |           0.0313 |    7.290 ms |    569.28 KB |        0.35 |
-// |                        |            |       |             |           |            |       |         |                      |                  |             |              |             |
-// | Task_Delay             | 10000      | 1000  | 1,200.12 ms |  0.670 ms |   0.627 ms |  1.00 |    0.00 |           10000.0000 |         632.0000 |  166.580 ms |   1644.81 KB |        1.00 |
-// | HashedWheelTimer_Delay | 10000      | 1000  | 1,212.00 ms |  2.788 ms |   2.608 ms |  1.01 |    0.00 |           10000.0000 |                - |   26.186 ms |   3988.56 KB |        2.42 |
-// | DelayTree_Hybrid       | 10000      | 1000  | 1,199.79 ms |  0.302 ms |   0.283 ms |  1.00 |    0.00 |           10000.0000 |                - |  168.884 ms |    642.13 KB |        0.39 |
-// |                        |            |       |             |           |            |       |         |                      |                  |             |              |             |
-// | Task_Delay             | 1000000    | 10    |   843.54 ms | 52.122 ms | 153.682 ms |  1.04 |    0.28 |         1000000.0000 |        7029.0000 | 1442.444 ms | 164076.87 KB |       1.000 |
-// | HashedWheelTimer_Delay | 1000000    | 10    |   877.93 ms | 28.428 ms |  82.021 ms |  1.08 |    0.23 |         1000000.0000 |                - | 1099.105 ms | 398447.09 KB |       2.428 |
-// | DelayTree_Hybrid       | 1000000    | 10    |   101.46 ms |  0.872 ms |   0.728 ms |  0.12 |    0.02 |           13231.0000 |                - |   87.809 ms |    722.73 KB |       0.004 |
-// |                        |            |       |             |           |            |       |         |                      |                  |             |              |             |
-// | Task_Delay             | 1000000    | 1000  | 2,102.15 ms | 41.956 ms | 117.650 ms |  1.00 |    0.08 |          999996.0000 |        4092.0000 | 2562.816 ms | 164071.02 KB |        1.00 |
-// | HashedWheelTimer_Delay | 1000000    | 1000  | 1,974.93 ms | 37.779 ms |  41.991 ms |  0.94 |    0.06 |         1000000.0000 |                - | 1306.272 ms | 398445.62 KB |        2.43 |
-// | DelayTree_Hybrid       | 1000000    | 1000  | 1,300.77 ms |  1.282 ms |   1.001 ms |  0.62 |    0.04 |         1000000.0000 |                - | 1045.291 ms |  56412.55 KB |        0.34 |
-
-// | Method                 | Recursions | Delay | Mean        | Error     | StdDev     | Ratio | RatioSD | Completed Work Items | Lock Contentions | CPU Time    | Allocated    | Alloc Ratio |
-// |----------------------- |----------- |------ |------------:|----------:|-----------:|------:|--------:|---------------------:|-----------------:|------------:|-------------:|------------:|
-// | Task_Delay             | 10000      | 10    |    16.78 ms |  0.332 ms |   0.814 ms |  1.00 |    0.07 |           10000.0000 |          38.0938 |   16.617 ms |   1640.86 KB |       1.000 |                                                                                                                     
-// | HashedWheelTimer_Delay | 10000      | 10    |    23.63 ms |  0.616 ms |   1.747 ms |  1.41 |    0.12 |           10000.0000 |           0.0313 |    8.523 ms |   3984.61 KB |       2.428 |
-// | DelayTree_Hybrid       | 10000      | 10    |    11.44 ms |  0.102 ms |   0.091 ms |  0.68 |    0.03 |               1.7031 |           0.0938 |    0.645 ms |      1.22 KB |       0.001 |
-// |                        |            |       |             |           |            |       |         |                      |                  |             |              |             |
-// | Task_Delay             | 10000      | 1000  | 1,200.05 ms |  0.627 ms |   0.523 ms |  1.00 |    0.00 |           10000.0000 |         266.0000 |   91.390 ms |   1644.75 KB |        1.00 |
-// | HashedWheelTimer_Delay | 10000      | 1000  | 1,210.67 ms |  2.827 ms |   2.645 ms |  1.01 |    0.00 |           10000.0000 |                - |   14.936 ms |   3984.61 KB |        2.42 |
-// | DelayTree_Hybrid       | 10000      | 1000  | 1,199.58 ms |  0.282 ms |   0.264 ms |  1.00 |    0.00 |              10.0000 |                - |  156.172 ms |     79.66 KB |        0.05 |
-// |                        |            |       |             |           |            |       |         |                      |                  |             |              |             |
-// | Task_Delay             | 1000000    | 10    |   814.32 ms | 47.577 ms | 140.283 ms |  1.03 |    0.26 |         1000000.0000 |        1351.0000 | 1417.274 ms | 164062.67 KB |       1.000 |
-// | HashedWheelTimer_Delay | 1000000    | 10    |   830.33 ms | 19.892 ms |  55.121 ms |  1.05 |    0.20 |         1000000.0000 |                - | 1058.042 ms | 398441.52 KB |       2.429 |
-// | DelayTree_Hybrid       | 1000000    | 10    |    86.21 ms |  1.074 ms |   0.952 ms |  0.11 |    0.02 |               7.6667 |                - |   54.766 ms |     15.94 KB |       0.000 |
-// |                        |            |       |             |           |            |       |         |                      |                  |             |              |             |
-// | Task_Delay             | 1000000    | 1000  | 2,057.83 ms | 40.913 ms |  61.237 ms |  1.00 |    0.04 |         1000000.0000 |        2913.0000 | 2207.383 ms | 164072.86 KB |       1.000 |
-// | HashedWheelTimer_Delay | 1000000    | 1000  | 1,997.51 ms | 36.757 ms |  34.382 ms |  0.97 |    0.03 |         1000000.0000 |                - | 1166.088 ms | 398445.56 KB |       2.428 |
-// | DelayTree_Hybrid       | 1000000    | 1000  | 1,286.28 ms |  1.493 ms |   1.323 ms |  0.63 |    0.02 |              93.0000 |           1.0000 |  220.195 ms |     92.45 KB |       0.001 |
+// | Method                 | Recursions | Delay | Mean        | Error     | StdDev     | Median      | Ratio | RatioSD | Completed Work Items | Lock Contentions | CPU Time    | Allocated    | Alloc Ratio |
+// |----------------------- |----------- |------ |------------:|----------:|-----------:|------------:|------:|--------:|---------------------:|-----------------:|------------:|-------------:|------------:|
+// | Task_Delay             | 10000      | 10    |    14.36 ms |  0.286 ms |   0.515 ms |    14.38 ms |  1.00 |    0.05 |           10000.0313 |          14.9375 |    7.390 ms |    1640.8 KB |       1.000 |                                                                                                       
+// | HashedWheelTimer_Delay | 10000      | 10    |    21.48 ms |  0.423 ms |   0.910 ms |    21.10 ms |  1.50 |    0.08 |           10443.3750 |                - |    7.326 ms |   3984.55 KB |       2.428 |
+// | DelayTree              | 10000      | 10    |    11.82 ms |  0.056 ms |   0.047 ms |    11.82 ms |  0.82 |    0.03 |               2.4375 |           0.1563 |    0.380 ms |      1.25 KB |       0.001 |
+// |                        |            |       |             |           |            |             |       |         |                      |                  |             |              |             |
+// | Task_Delay             | 10000      | 1000  | 1,199.54 ms |  0.535 ms |   0.500 ms | 1,199.56 ms |  1.00 |    0.00 |           10000.0000 |         214.0000 |   62.248 ms |   1644.69 KB |        1.00 |
+// | HashedWheelTimer_Delay | 10000      | 1000  | 1,213.03 ms |  1.676 ms |   1.568 ms | 1,213.59 ms |  1.01 |    0.00 |           10000.0000 |                - |   16.785 ms |   3988.16 KB |        2.42 |
+// | DelayTree              | 10000      | 1000  | 1,200.23 ms |  0.635 ms |   0.594 ms | 1,200.33 ms |  1.00 |    0.00 |               6.0000 |                - |    4.715 ms |     75.78 KB |        0.05 |
+// |                        |            |       |             |           |            |             |       |         |                      |                  |             |              |             |
+// | Task_Delay             | 1000000    | 10    |   853.55 ms | 52.826 ms | 155.758 ms |   875.20 ms |  1.04 |    0.29 |         1000000.0000 |        5998.0000 | 1749.742 ms | 164062.67 KB |       1.000 |
+// | HashedWheelTimer_Delay | 1000000    | 10    |   710.18 ms | 12.949 ms |  12.113 ms |   711.41 ms |  0.86 |    0.18 |         1000633.0000 |                - |  974.608 ms | 398445.48 KB |       2.429 |
+// | DelayTree              | 1000000    | 10    |    71.59 ms |  1.352 ms |   2.024 ms |    70.62 ms |  0.09 |    0.02 |               8.4286 |                - |  123.333 ms |     12.22 KB |       0.000 |
+// |                        |            |       |             |           |            |             |       |         |                      |                  |             |              |             |
+// | Task_Delay             | 1000000    | 1000  | 1,932.87 ms | 38.396 ms | 104.460 ms | 1,944.77 ms |  1.00 |    0.08 |         1000014.0000 |         800.0000 | 2050.442 ms | 164070.72 KB |       1.000 |
+// | HashedWheelTimer_Delay | 1000000    | 1000  | 1,993.49 ms | 36.582 ms |  58.023 ms | 1,976.97 ms |  1.03 |    0.06 |         1000007.0000 |                - | 1158.313 ms | 398446.34 KB |       2.429 |
+// | DelayTree              | 1000000    | 1000  | 1,276.58 ms |  4.470 ms |   4.182 ms | 1,275.23 ms |  0.66 |    0.04 |              54.0000 |                - |   47.668 ms |     91.73 KB |       0.001 |
 
 /// <summary>
 /// Throughput benchmark: schedule N concurrent delays and wait for all to complete.
@@ -166,42 +148,6 @@ public class DelayTreeBenchmark
         foreach (Task task in _tasks)
         {
             await task;
-        }
-    }
-
-    #endregion
-    
-    #region DelayTree ValueTask
-
-    private DelayTree<ValueTaskCompletion, ValueTask>? _delayTreeValueTask;
-
-    [GlobalSetup(Target = nameof(DelayTree_ValueTask))]
-    public void DelayTree_ValueTask_Setup()
-    {
-        _delays = Enumerable.Range(0, Recursions).Select(GetRandomDelay).ToArray();
-        _tasks = new Task[Recursions];
-        _valueTasks = new ValueTask[Recursions];
-        _delayTreeValueTask = new DelayTree<ValueTaskCompletion, ValueTask>(16, new DelayTreeHybridTimer());
-    }
-
-    [GlobalCleanup(Target = nameof(DelayTree_ValueTask))]
-    public void DelayTree_ValueTask_Cleanup()
-    {
-        _delayTreeValueTask!.Dispose();
-        _delayTreeValueTask = null;
-    }
-
-    [Benchmark(OperationsPerInvoke = 1)]
-    public async Task DelayTree_ValueTask()
-    {
-        for (int i = 0; i < _delays.Length; i++)
-        {
-            _valueTasks[i] = _delayTreeValueTask!.Delay((uint)_delays[i]);
-        }
-
-        foreach (ValueTask valueTask in _valueTasks)
-        {
-            await valueTask;
         }
     }
 

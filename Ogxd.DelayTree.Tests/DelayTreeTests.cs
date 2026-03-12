@@ -170,40 +170,6 @@ public class DelayTreeTests
         Assert.AreEqual(expectedAwaitedTasks, awaited, 0.2d * expectedAwaitedTasks);
         Assert.AreEqual(duration + maxDelay, stopwatch.ElapsedMilliseconds, 1000d);
     }
-    
-    [Test]
-    [Timeout(30_000)]
-    public async Task Chaos_ValueTask(
-        [Values(16)] int depth,
-        [Values(100, 100_000)] int parallelism)
-    {
-        const int duration = 5_000;
-        const int minDelay = 10;
-        const int maxDelay = 2000;
-
-        using DelayTree<ValueTaskCompletion, ValueTask> delayTree = new(depth);
-
-        int awaited = 0;
-
-        Stopwatch stopwatch = Stopwatch.StartNew();
-
-        Task[] tasks = Enumerable.Range(0, parallelism).Select(async _ =>
-        {
-            while (stopwatch.ElapsedMilliseconds < duration)
-            {
-                await delayTree.Delay((uint)Random.Shared.Next(minDelay, maxDelay));
-                Interlocked.Increment(ref awaited);
-            }
-        }).ToArray();
-
-        await Task.WhenAll(tasks);
-
-        stopwatch.Stop();
-
-        double expectedAwaitedTasks = 1d * parallelism * duration / ((maxDelay - minDelay) / 2d);
-        Assert.AreEqual(expectedAwaitedTasks, awaited, 0.2d * expectedAwaitedTasks);
-        Assert.AreEqual(duration + maxDelay, stopwatch.ElapsedMilliseconds, 1000d);
-    }
 
     [Test]
     [Timeout(30_000)]
