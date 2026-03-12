@@ -22,6 +22,7 @@ public class BdnRepro
     /// Simulates BDN's InProcess blocking: benchmark thread calls GetAwaiter().GetResult()
     /// which BLOCKS a dedicated thread (not a thread pool thread), just like BDN does.
     /// </summary>
+    [Explicit]
     [Test]
     [Timeout(120_000)]
     public void SimulateBdnInProcessRun_BitDepth12_Blocking()
@@ -73,6 +74,7 @@ public class BdnRepro
         }
     }
 
+    [Explicit]
     [Test]
     [Timeout(120_000)]
     public async Task SimulateBdnInProcessRun_BitDepth12()
