@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="Lib.Harmony" Version="2.3.5" />
+        <PackageReference Include="Lib.Harmony" Version="2.4.2" />
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\Ogxd.DelayTree\Ogxd.DelayTree.csproj" />
